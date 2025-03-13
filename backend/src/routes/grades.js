@@ -2,6 +2,9 @@ const Router = require('koa-router');
 const router = new Router({ prefix: '/grades' });
 const { auth, checkRole } = require('../middlewares/auth');
 const Grade = require('../models/grade');
+const Course = require('../models/course');
+const User = require('../models/user');
+const notificationService = require('../services/notificationService');
 
 // Get student's grades
 router.get('/my-grades', auth, checkRole(['student']), async (ctx) => {
@@ -31,6 +34,35 @@ router.get('/course/:courseId', auth, checkRole(['admin', 'teacher']), async (ct
 router.post('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
   const gradeData = ctx.request.body;
 
+  // 查找课程信息
+  const course = await Course.findById(gradeData.courseId);
+  if (!course) {
+    ctx.status = 404;
+    ctx.body = {
+      success: false,
+      message: '课程不存在'
+    };
+    return;
+  }
+
+  // 查找学生信息
+  const student = await User.findById(gradeData.studentId);
+  if (!student) {
+    ctx.status = 404;
+    ctx.body = {
+      success: false,
+      message: '学生不存在'
+    };
+    return;
+  }
+
+  // 检查是否为更新或新增
+  const existingGrade = await Grade.findOne({
+    studentId: gradeData.studentId,
+    courseId: gradeData.courseId,
+    type: gradeData.type
+  });
+
   const grade = await Grade.findOneAndUpdate(
     {
       studentId: gradeData.studentId,
@@ -45,6 +77,34 @@ router.post('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
     }
   );
 
+  // 发送成绩通知给学生
+  const gradeTypeMap = {
+    'assignment': '作业',
+    'quiz': '测验',
+    'midterm': '期中考试',
+    'final': '期末考试',
+    'project': '项目',
+    'participation': '课堂参与'
+  };
+
+  const gradeTypeName = gradeTypeMap[gradeData.type] || gradeData.type;
+  
+  if (existingGrade) {
+    // 更新成绩通知
+    await notificationService.createGradeNotification(
+      gradeData.studentId,
+      '成绩已更新',
+      `您在课程 ${course.name}（${course.code}）的${gradeTypeName}成绩已更新为 ${gradeData.score}/${gradeData.totalPoints}`
+    );
+  } else {
+    // 新增成绩通知
+    await notificationService.createGradeNotification(
+      gradeData.studentId,
+      '新成绩已发布',
+      `您在课程 ${course.name}（${course.code}）的${gradeTypeName}成绩已发布：${gradeData.score}/${gradeData.totalPoints}`
+    );
+  }
+
   ctx.status = 201;
   ctx.body = {
     success: true,
@@ -54,11 +114,22 @@ router.post('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
 
 // Delete grade (admin only)
 router.delete('/:id', auth, checkRole(['admin']), async (ctx) => {
-  const grade = await Grade.findByIdAndDelete(ctx.params.id);
+  const grade = await Grade.findById(ctx.params.id)
+    .populate('courseId', 'name code')
+    .populate('studentId', 'name');
   
   if (!grade) {
     ctx.throw(404, 'Grade not found');
   }
+
+  // 发送成绩删除通知给学生
+  await notificationService.createGradeNotification(
+    grade.studentId._id,
+    '成绩已删除',
+    `您在课程 ${grade.courseId.name}（${grade.courseId.code}）的成绩记录已被删除`
+  );
+
+  await grade.deleteOne();
 
   ctx.body = {
     success: true,

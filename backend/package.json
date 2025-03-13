@@ -8,7 +8,7 @@
     "dev": "nodemon src/app.js",
     "test": "jest",
     "start:db": "docker run -d --name mongodb-dev -p 27017:27017 mongo",
-    "stop:db": "docker stop mongodb-dev && docker rm mongodb-dev"
+    "stop:db": "docker stop mongodb-dev && docker rm mongodb-dev || true"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "jest": "^29.7.0",
+    "kill-port": "^2.0.1",
     "nodemon": "^3.0.1",
     "supertest": "^6.3.3"
   }

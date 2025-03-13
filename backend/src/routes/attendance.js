@@ -2,6 +2,9 @@ const Router = require('koa-router');
 const router = new Router({ prefix: '/attendance' });
 const { auth, checkRole } = require('../middlewares/auth');
 const Attendance = require('../models/attendance');
+const Course = require('../models/course');
+const User = require('../models/user');
+const notificationService = require('../services/notificationService');
 
 // Get student's attendance records
 router.get('/my-attendance', auth, checkRole(['student']), async (ctx) => {
@@ -34,6 +37,12 @@ router.post('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
   // Handle bulk attendance records
   if (Array.isArray(attendanceData)) {
     const attendance = await Attendance.insertMany(attendanceData);
+    
+    // 批量发送考勤通知
+    for (const record of attendance) {
+      await sendAttendanceNotification(record);
+    }
+    
     ctx.status = 201;
     ctx.body = {
       success: true,
@@ -57,6 +66,9 @@ router.post('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
     }
   );
 
+  // 发送考勤通知
+  await sendAttendanceNotification(attendance);
+
   ctx.status = 201;
   ctx.body = {
     success: true,
@@ -76,10 +88,51 @@ router.put('/:id', auth, checkRole(['admin', 'teacher']), async (ctx) => {
     ctx.throw(404, 'Attendance record not found');
   }
 
+  // 发送考勤更新通知
+  await sendAttendanceNotification(attendance, true);
+
   ctx.body = {
     success: true,
     data: attendance
   };
 });
+
+// 发送考勤通知的辅助函数
+async function sendAttendanceNotification(attendanceRecord, isUpdate = false) {
+  try {
+    // 获取课程信息
+    const course = await Course.findById(attendanceRecord.courseId);
+    if (!course) return;
+
+    // 获取学生信息
+    const student = await User.findById(attendanceRecord.studentId);
+    if (!student) return;
+
+    // 格式化日期
+    const date = new Date(attendanceRecord.date).toLocaleDateString('zh-CN');
+    
+    // 考勤状态映射
+    const statusMap = {
+      'present': '出席',
+      'absent': '缺席',
+      'late': '迟到',
+      'excused': '请假'
+    };
+    
+    const status = statusMap[attendanceRecord.status] || attendanceRecord.status;
+    
+    // 发送通知
+    const title = isUpdate ? '考勤记录已更新' : '新考勤记录';
+    const message = `您在 ${date} 的课程 ${course.name}（${course.code}）考勤状态为：${status}`;
+    
+    await notificationService.createAttendanceNotification(
+      attendanceRecord.studentId,
+      title,
+      message
+    );
+  } catch (error) {
+    console.error('发送考勤通知失败:', error);
+  }
+}
 
 module.exports = router; 

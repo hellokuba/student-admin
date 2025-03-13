@@ -6,6 +6,7 @@ const errorHandler = require('./middlewares/errorHandler');
 const router = require('./routes');
 const connectDB = require('./config/database');
 const setupSwagger = require('./utils/swagger');
+const initNotifications = require('./utils/initNotifications');
 
 // Load environment variables
 require('dotenv').config();
@@ -42,9 +43,26 @@ app.on('error', (err, ctx) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-  logger.info(`API 文档地址: http://localhost:${PORT}/api/docs`);
+const server = app.listen(PORT, () => {
+  logger.info(`Server running on port ${server.address().port}`);
+  logger.info(`API 文档地址: http://localhost:${server.address().port}/api/docs`);
+  
+  // 初始化通知
+  initNotifications().catch(err => {
+    logger.error('初始化通知失败:', err);
+  });
 });
+
+// 处理端口占用错误
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.warn(`端口 ${PORT} 已被占用，尝试使用端口 ${PORT + 1}`);
+    server.listen(PORT + 1);
+  } else {
+    logger.error('服务器启动错误:', err);
+  }
+});
+
+// 测试 nodemon 重启
 
 module.exports = app; 

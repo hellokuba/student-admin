@@ -15,10 +15,28 @@ services:
       - 8.8.4.4
     environment:
       - NODE_OPTIONS=--max-old-space-size=2048
+      - VITE_API_BASE_URL=http://backend:3000
     networks:
       - app-network
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - backend
+
+  backend:
+    image: ${BACKEND_IMAGE:-student-admin-backend:latest}
+    container_name: student-admin-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

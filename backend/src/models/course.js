@@ -14,7 +14,7 @@ const courseSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true
+    default: ''
   },
   teacherId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -28,7 +28,7 @@ const courseSchema = new mongoose.Schema({
   },
   capacity: {
     type: Number,
-    required: true,
+    default: 30,
     min: 1
   },
   schedule: [{
