@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Background Circle -->
+  <circle cx="50" cy="50" r="50" fill="#4CAF50"/>
+  
+  <!-- Head -->
+  <circle cx="50" cy="40" r="20" fill="#FFFFFF"/>
+  
+  <!-- Body -->
+  <path d="M50,65 C35,65 25,75 20,90 C30,95 40,100 50,100 C60,100 70,95 80,90 C75,75 65,65 50,65 Z" fill="#FFFFFF"/>
+  
+  <!-- Graduation cap to represent student -->
+  <path d="M25,35 L50,25 L75,35 L50,45 Z" fill="#673AB7"/>
+  <path d="M50,45 L50,55 M60,38 L60,50 C60,53 55,58 50,58 C45,58 40,53 40,50 L40,40" stroke="#673AB7" stroke-width="2" fill="none"/>
+  <circle cx="60" cy="50" r="2" fill="#673AB7"/>
+  
+  <!-- Backpack straps -->
+  <path d="M40,65 L45,85 M60,65 L55,85" stroke="#FFC107" stroke-width="3"/>
+</svg> 
