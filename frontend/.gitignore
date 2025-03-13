@@ -64,6 +64,11 @@ coverage
 # npm
 .npmrc
 
+# Docker
+.docker/data
+docker-compose.override.yml
+.dockerignore
+
 # Temporary files
 *.tmp
 *.bak

@@ -5,15 +5,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: student-admin-frontend
+      args:
+        - NODE_ENV=production
     ports:
-      - "80:80"
+      - "8080:80"
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
-      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=2048
     networks:
-      - student-admin-network
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
-  student-admin-network:
+  app-network:
     driver: bridge 
