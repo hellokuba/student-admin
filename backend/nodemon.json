@@ -1,0 +1,10 @@
+{
+  "events": {
+    "restart": "kill-port 3000",
+    "crash": "kill-port 3000",
+    "quit": "npm run stop:db"
+  },
+  "delay": "1500",
+  "watch": ["src"],
+  "ext": "js,json"
+}
