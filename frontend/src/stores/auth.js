@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import axios from '@/utils/axios'
+import router from '@/router'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -24,9 +25,6 @@ export const useAuthStore = defineStore('auth', {
           this.user = response.data.data.user
           
           localStorage.setItem('token', this.token)
-          
-          // 设置 axios 默认请求头
-          axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
           
           return { success: true }
         }
@@ -68,9 +66,7 @@ export const useAuthStore = defineStore('auth', {
         
         return { success: false, message: '获取用户信息失败' }
       } catch (error) {
-        if (error.response?.status === 401) {
-          this.logout()
-        }
+        // 401错误已在axios拦截器中处理
         return { 
           success: false, 
           message: error.response?.data?.error?.message || '获取用户信息失败' 
@@ -96,17 +92,26 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     
-    logout() {
+    logout(redirectToLogin = false) {
+      // 清除状态
       this.user = null
       this.token = null
+      
+      // 清除本地存储
       localStorage.removeItem('token')
-      delete axios.defaults.headers.common['Authorization']
+      
+      // 如果需要重定向到登录页
+      if (redirectToLogin && router.currentRoute.value.path !== '/auth/login') {
+        router.push('/auth/login')
+      }
     },
     
     initializeAuth() {
       if (this.token) {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-        this.fetchUserProfile()
+        this.fetchUserProfile().catch(() => {
+          // 如果获取用户信息失败，清除token
+          this.logout()
+        })
       }
     }
   }

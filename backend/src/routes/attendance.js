@@ -6,6 +6,45 @@ const Course = require('../models/course');
 const User = require('../models/user');
 const notificationService = require('../services/notificationService');
 
+// Get all attendance records (admin and teacher only)
+router.get('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
+  try {
+    let attendanceRecords;
+    
+    // If teacher, only show attendance for courses they teach
+    if (ctx.state.user.role === 'teacher') {
+      // First find courses taught by this teacher
+      const teacherCourses = await Course.find({ teacherId: ctx.state.user.id }).select('_id');
+      const courseIds = teacherCourses.map(course => course._id);
+      
+      // Then find attendance records for those courses
+      attendanceRecords = await Attendance.find({ courseId: { $in: courseIds } })
+        .populate('studentId', 'name username')
+        .populate('courseId', 'name code')
+        .sort({ date: -1 });
+    } else {
+      // Admin can see all attendance records
+      attendanceRecords = await Attendance.find({})
+        .populate('studentId', 'name username')
+        .populate('courseId', 'name code')
+        .sort({ date: -1 });
+    }
+
+    ctx.body = {
+      success: true,
+      data: attendanceRecords
+    };
+  } catch (error) {
+    console.error('Error fetching all attendance records:', error);
+    ctx.status = 500;
+    ctx.body = {
+      success: false,
+      message: 'Failed to fetch attendance records',
+      error: error.message
+    };
+  }
+});
+
 // Get student's attendance records
 router.get('/my-attendance', auth, checkRole(['student']), async (ctx) => {
   const attendance = await Attendance.find({ studentId: ctx.state.user.id })

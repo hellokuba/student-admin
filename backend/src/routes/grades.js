@@ -6,6 +6,45 @@ const Course = require('../models/course');
 const User = require('../models/user');
 const notificationService = require('../services/notificationService');
 
+// Get all grades (admin and teacher only)
+router.get('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
+  try {
+    let grades;
+    
+    // If teacher, only show grades for courses they teach
+    if (ctx.state.user.role === 'teacher') {
+      // First find courses taught by this teacher
+      const teacherCourses = await Course.find({ teacherId: ctx.state.user.id }).select('_id');
+      const courseIds = teacherCourses.map(course => course._id);
+      
+      // Then find grades for those courses
+      grades = await Grade.find({ courseId: { $in: courseIds } })
+        .populate('studentId', 'name username')
+        .populate('courseId', 'name code')
+        .sort({ createdAt: -1 });
+    } else {
+      // Admin can see all grades
+      grades = await Grade.find({})
+        .populate('studentId', 'name username')
+        .populate('courseId', 'name code')
+        .sort({ createdAt: -1 });
+    }
+
+    ctx.body = {
+      success: true,
+      data: grades
+    };
+  } catch (error) {
+    console.error('Error fetching all grades:', error);
+    ctx.status = 500;
+    ctx.body = {
+      success: false,
+      message: 'Failed to fetch grades',
+      error: error.message
+    };
+  }
+});
+
 // Get student's grades
 router.get('/my-grades', auth, checkRole(['student']), async (ctx) => {
   const grades = await Grade.find({ studentId: ctx.state.user.id })

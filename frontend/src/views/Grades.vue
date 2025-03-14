@@ -63,8 +63,12 @@
       
       <!-- 教师/管理员视图：课程成绩管理 -->
       <div v-else>
-        <div v-if="!selectedCourseId" class="empty-state">
-          <el-empty description="请选择一个课程查看成绩" />
+        <div v-if="!selectedCourseId && grades.length === 0" class="empty-state">
+          <el-empty description="暂无成绩数据" />
+        </div>
+        
+        <div v-else-if="selectedCourseId && grades.length === 0" class="empty-state">
+          <el-empty description="该课程暂无成绩数据" />
         </div>
         
         <div v-else>
@@ -245,7 +249,12 @@ const formatDate = (dateString) => {
 const fetchCourses = async () => {
   try {
     const response = await courseService.getCourses()
-    courses.value = response.data
+    // Map _id to id for compatibility
+    courses.value = response.data.map(course => ({
+      ...course,
+      id: course._id
+    }))
+    console.log('Courses loaded:', courses.value)
   } catch (error) {
     ElMessage.error('获取课程列表失败')
     console.error('Failed to fetch courses:', error)
@@ -255,12 +264,38 @@ const fetchCourses = async () => {
 // 获取学生列表
 const fetchStudents = async () => {
   try {
-    const response = await userService.getUsers()
-    // Map _id to id for compatibility
-    students.value = response.data.filter(user => user.role === 'student').map(user => ({
-      ...user,
-      id: user._id
-    }))
+    // First try to get users directly
+    try {
+      const response = await userService.getUsers()
+      // Map _id to id for compatibility
+      students.value = response.data.filter(user => user.role === 'student').map(user => ({
+        ...user,
+        id: user._id
+      }))
+      console.log('Students loaded:', students.value)
+    } catch (error) {
+      // If we get a 401/403 error, try to get students from grades
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        console.log('Falling back to getting students from grades')
+        if (selectedCourseId.value) {
+          const gradesResponse = await gradeService.getCourseGrades(selectedCourseId.value)
+          // Extract unique students from grades
+          const uniqueStudents = new Map()
+          gradesResponse.data.forEach(grade => {
+            if (grade.student && grade.student._id) {
+              uniqueStudents.set(grade.student._id, {
+                ...grade.student,
+                id: grade.student._id
+              })
+            }
+          })
+          students.value = Array.from(uniqueStudents.values())
+          console.log('Students loaded from grades:', students.value)
+        }
+      } else {
+        throw error
+      }
+    }
   } catch (error) {
     ElMessage.error('获取学生列表失败')
     console.error('Failed to fetch students:', error)
@@ -282,21 +317,80 @@ const fetchStudentGrades = async () => {
   }
 }
 
+// 获取所有课程的成绩
+const fetchAllCoursesGrades = () => {
+  if (courses.value.length > 0) {
+    // Create an array to store all grades
+    let allGrades = [];
+    
+    // Create a counter to track completed requests
+    let completedRequests = 0;
+    
+    // Show loading indicator
+    loading.value = true;
+    
+    // Fetch grades for each course
+    courses.value.forEach(course => {
+      gradeService.getCourseGrades(course.id)
+        .then(response => {
+          // Add grades from this course to the array
+          allGrades = [...allGrades, ...response.data];
+          
+          // Increment the counter
+          completedRequests++;
+          
+          // If all requests are complete, update the grades array
+          if (completedRequests === courses.value.length) {
+            grades.value = allGrades;
+            loading.value = false;
+          }
+        })
+        .catch(error => {
+          console.error(`Failed to fetch grades for course ${course.name}:`, error);
+          
+          // Increment the counter even if there's an error
+          completedRequests++;
+          
+          // If all requests are complete, update the grades array
+          if (completedRequests === courses.value.length) {
+            grades.value = allGrades;
+            loading.value = false;
+          }
+        });
+    });
+  }
+}
+
 // 获取课程成绩
 const fetchCourseGrades = async (courseId) => {
-  if (!courseId) {
-    grades.value = []
-    return
+  if (courseId) {
+    loading.value = true
+    
+    try {
+      const response = await gradeService.getCourseGrades(courseId)
+      grades.value = response.data
+    } catch (error) {
+      ElMessage.error('获取课程成绩失败')
+      console.error('Failed to fetch course grades:', error)
+    } finally {
+      loading.value = false
+    }
+  } else {
+    // When no course is selected, fetch grades for all courses
+    fetchAllCoursesGrades();
   }
-  
+}
+
+// 获取所有成绩
+const fetchAllGrades = async () => {
   loading.value = true
   
   try {
-    const response = await gradeService.getCourseGrades(courseId)
+    const response = await gradeService.getAllGrades()
     grades.value = response.data
   } catch (error) {
-    ElMessage.error('获取课程成绩失败')
-    console.error('Failed to fetch course grades:', error)
+    ElMessage.error('获取成绩失败')
+    console.error('Failed to fetch all grades:', error)
   } finally {
     loading.value = false
   }
@@ -307,7 +401,8 @@ const handleCourseChange = (courseId) => {
   if (courseId) {
     fetchCourseGrades(courseId)
   } else {
-    grades.value = []
+    // When no course is selected, fetch grades for all courses
+    fetchAllCoursesGrades();
   }
 }
 
@@ -395,7 +490,11 @@ const handleSubmitGrade = async () => {
           ...gradeForm,
           // Ensure we're using the MongoDB _id format
           studentId: gradeForm.studentId,
-          courseId: gradeForm.courseId
+          courseId: gradeForm.courseId,
+          // Ensure score is a number
+          score: Number(gradeForm.score),
+          // Ensure comment is a string
+          comment: gradeForm.comment || ''
         }
         
         // If editing, include the ID
@@ -430,8 +529,12 @@ onMounted(() => {
   if (isStudent.value) {
     fetchStudentGrades()
   } else {
-    fetchCourses()
-    fetchStudents()
+    fetchCourses().then(() => {
+      // After courses are loaded, fetch grades for all courses
+      fetchAllCoursesGrades();
+    });
+    
+    fetchStudents();
   }
 })
 

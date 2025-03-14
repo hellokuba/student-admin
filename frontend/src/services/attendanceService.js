@@ -1,10 +1,20 @@
-import axios from 'axios'
+import axios from '@/utils/axios'
 
 export const attendanceService = {
   // 获取学生的所有考勤记录
   async getMyAttendance() {
     try {
       const response = await axios.get('/api/attendance/my-attendance')
+      return response.data
+    } catch (error) {
+      throw error
+    }
+  },
+  
+  // 获取所有考勤记录
+  async getAllAttendance() {
+    try {
+      const response = await axios.get('/api/attendance')
       return response.data
     } catch (error) {
       throw error

@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios from '@/utils/axios'
 import { mockNotificationService } from './mockNotificationService'
 
 // 判断是否使用模拟数据（开发环境使用模拟数据，生产环境使用真实API）

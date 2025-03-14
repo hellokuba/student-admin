@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios from '@/utils/axios'
 
 export const userService = {
   // 获取所有用户

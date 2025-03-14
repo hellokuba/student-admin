@@ -74,8 +74,12 @@
       
       <!-- 教师/管理员视图：课程考勤管理 -->
       <div v-else>
-        <div v-if="!selectedCourseId" class="empty-state">
-          <el-empty description="请选择一个课程查看考勤记录" />
+        <div v-if="!selectedCourseId && attendanceRecords.length === 0" class="empty-state">
+          <el-empty description="暂无考勤数据" />
+        </div>
+        
+        <div v-else-if="selectedCourseId && attendanceRecords.length === 0" class="empty-state">
+          <el-empty description="该课程暂无考勤数据" />
         </div>
         
         <div v-else>
@@ -320,7 +324,12 @@ const getStatusText = (status) => {
 const fetchCourses = async () => {
   try {
     const response = await courseService.getCourses()
-    courses.value = response.data
+    // Map _id to id for compatibility
+    courses.value = response.data.map(course => ({
+      ...course,
+      id: course._id
+    }))
+    console.log('Courses loaded:', courses.value)
   } catch (error) {
     ElMessage.error('获取课程列表失败')
     console.error('Failed to fetch courses:', error)
@@ -342,42 +351,125 @@ const fetchStudentAttendance = async () => {
   }
 }
 
+// 获取所有课程的考勤记录
+const fetchAllCoursesAttendance = () => {
+  if (courses.value.length > 0) {
+    // Create an array to store all attendance records
+    let allAttendanceRecords = [];
+    
+    // Create a counter to track completed requests
+    let completedRequests = 0;
+    
+    // Show loading indicator
+    loading.value = true;
+    
+    // Fetch attendance records for each course
+    courses.value.forEach(course => {
+      attendanceService.getCourseAttendance(course.id)
+        .then(response => {
+          // Add attendance records from this course to the array
+          allAttendanceRecords = [...allAttendanceRecords, ...response.data];
+          
+          // Increment the counter
+          completedRequests++;
+          
+          // If all requests are complete, update the attendanceRecords array
+          if (completedRequests === courses.value.length) {
+            attendanceRecords.value = allAttendanceRecords;
+            loading.value = false;
+          }
+        })
+        .catch(error => {
+          console.error(`Failed to fetch attendance for course ${course.name}:`, error);
+          
+          // Increment the counter even if there's an error
+          completedRequests++;
+          
+          // If all requests are complete, update the attendanceRecords array
+          if (completedRequests === courses.value.length) {
+            attendanceRecords.value = allAttendanceRecords;
+            loading.value = false;
+          }
+        });
+    });
+  }
+}
+
 // 获取课程考勤记录
 const fetchCourseAttendance = async (courseId) => {
   if (!courseId) {
-    attendanceRecords.value = []
-    return
+    // When no course is selected, fetch attendance for all courses
+    fetchAllCoursesAttendance();
+    return;
   }
   
-  loading.value = true
+  loading.value = true;
   
   try {
-    const response = await attendanceService.getCourseAttendance(courseId)
-    attendanceRecords.value = response.data
+    const response = await attendanceService.getCourseAttendance(courseId);
+    attendanceRecords.value = response.data;
   } catch (error) {
-    ElMessage.error('获取课程考勤记录失败')
-    console.error('Failed to fetch course attendance:', error)
+    ElMessage.error('获取课程考勤记录失败');
+    console.error('Failed to fetch course attendance:', error);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 // 获取课程学生列表（用于批量考勤）
 const fetchCourseStudents = async () => {
   try {
-    // 这里假设我们可以从用户列表中筛选出学生
-    // 实际应用中可能需要一个专门的API来获取课程的学生
-    const response = await userService.getUsers()
-    const students = response.data.filter(user => user.role === 'student')
-    
-    // 初始化批量考勤数据
-    batchStudents.value = students.map(student => ({
-      id: student.id,
-      name: student.name,
-      username: student.username,
-      status: 'present', // 默认出勤
-      remark: ''
-    }))
+    // First try to get users directly
+    try {
+      const response = await userService.getUsers()
+      const students = response.data.filter(user => user.role === 'student').map(user => ({
+        ...user,
+        id: user._id
+      }))
+      
+      // 初始化批量考勤数据
+      batchStudents.value = students.map(student => ({
+        id: student.id || student._id,
+        name: student.name,
+        username: student.username,
+        status: 'present', // 默认出勤
+        remark: ''
+      }))
+      
+      console.log('Batch students:', batchStudents.value)
+    } catch (error) {
+      // If we get a 401/403 error, try to get students from attendance records
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        console.log('Falling back to getting students from attendance records')
+        if (selectedCourseId.value) {
+          const attendanceResponse = await attendanceService.getCourseAttendance(selectedCourseId.value)
+          // Extract unique students from attendance records
+          const uniqueStudents = new Map()
+          attendanceResponse.data.forEach(record => {
+            if (record.student && record.student._id) {
+              uniqueStudents.set(record.student._id, {
+                ...record.student,
+                id: record.student._id
+              })
+            }
+          })
+          const students = Array.from(uniqueStudents.values())
+          
+          // 初始化批量考勤数据
+          batchStudents.value = students.map(student => ({
+            id: student.id || student._id,
+            name: student.name,
+            username: student.username,
+            status: 'present', // 默认出勤
+            remark: ''
+          }))
+          
+          console.log('Batch students from attendance:', batchStudents.value)
+        }
+      } else {
+        throw error
+      }
+    }
   } catch (error) {
     ElMessage.error('获取学生列表失败')
     console.error('Failed to fetch students:', error)
@@ -387,22 +479,24 @@ const fetchCourseStudents = async () => {
 // 处理课程选择变化
 const handleCourseChange = (courseId) => {
   if (courseId) {
-    fetchCourseAttendance(courseId)
+    fetchCourseAttendance(courseId);
   } else {
-    attendanceRecords.value = []
+    // When no course is selected, fetch attendance for all courses
+    fetchAllCoursesAttendance();
   }
 }
 
 // 处理编辑考勤
 const handleEditAttendance = (record) => {
   // 填充表单数据
-  attendanceForm.id = record.id
-  attendanceForm.studentId = record.studentId
-  attendanceForm.courseId = record.courseId
+  attendanceForm.id = record._id || record.id
+  attendanceForm.studentId = record.studentId?._id || record.studentId
+  attendanceForm.courseId = record.courseId?._id || record.courseId
   attendanceForm.date = record.date
   attendanceForm.status = record.status
-  attendanceForm.remark = record.remark
+  attendanceForm.remark = record.remark || ''
   
+  console.log('Editing attendance record:', attendanceForm)
   editDialogVisible.value = true
 }
 
@@ -454,13 +548,14 @@ const handleSubmitBatchAttendance = async () => {
   try {
     // 构建批量考勤数据
     const attendanceData = batchStudents.value.map(student => ({
-      studentId: student.id,
+      studentId: student.id || student._id,
       courseId: selectedCourseId.value,
       date: selectedDate.value,
       status: student.status,
-      remark: student.remark
+      remark: student.remark || ''
     }))
     
+    console.log('Submitting attendance data:', attendanceData)
     await attendanceService.recordBatchAttendance(attendanceData)
     
     ElMessage.success('批量考勤记录成功')
@@ -479,9 +574,12 @@ const handleSubmitBatchAttendance = async () => {
 // 初始化数据
 onMounted(() => {
   if (isStudent.value) {
-    fetchStudentAttendance()
+    fetchStudentAttendance();
   } else {
-    fetchCourses()
+    fetchCourses().then(() => {
+      // After courses are loaded, fetch attendance records for all courses
+      fetchAllCoursesAttendance();
+    });
   }
 })
 

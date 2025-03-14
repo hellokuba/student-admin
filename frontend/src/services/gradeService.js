@@ -1,10 +1,20 @@
-import axios from 'axios'
+import axios from '@/utils/axios'
 
 export const gradeService = {
   // 获取学生的所有成绩
   async getMyGrades() {
     try {
       const response = await axios.get('/api/grades/my-grades')
+      return response.data
+    } catch (error) {
+      throw error
+    }
+  },
+  
+  // 获取所有成绩
+  async getAllGrades() {
+    try {
+      const response = await axios.get('/api/grades')
       return response.data
     } catch (error) {
       throw error
