@@ -33,6 +33,7 @@
               type="primary"
               :disabled="!selectedCourseId || !selectedDate"
               @click="handleBatchAttendance"
+              style="margin-left: 15px;"
             >
               <el-icon><Plus /></el-icon>
               记录考勤

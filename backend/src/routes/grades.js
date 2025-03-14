@@ -84,7 +84,13 @@ router.post('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
     'midterm': '期中考试',
     'final': '期末考试',
     'project': '项目',
-    'participation': '课堂参与'
+    'participation': '课堂参与',
+    '期中考试': '期中考试',
+    '期末考试': '期末考试',
+    '平时成绩': '平时成绩',
+    '实验': '实验',
+    '作业': '作业',
+    '其他': '其他'
   };
 
   const gradeTypeName = gradeTypeMap[gradeData.type] || gradeData.type;
@@ -94,14 +100,14 @@ router.post('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
     await notificationService.createGradeNotification(
       gradeData.studentId,
       '成绩已更新',
-      `您在课程 ${course.name}（${course.code}）的${gradeTypeName}成绩已更新为 ${gradeData.score}/${gradeData.totalPoints}`
+      `您在课程 ${course.name}（${course.code}）的${gradeTypeName}成绩已更新为 ${gradeData.score}`
     );
   } else {
     // 新增成绩通知
     await notificationService.createGradeNotification(
       gradeData.studentId,
       '新成绩已发布',
-      `您在课程 ${course.name}（${course.code}）的${gradeTypeName}成绩已发布：${gradeData.score}/${gradeData.totalPoints}`
+      `您在课程 ${course.name}（${course.code}）的${gradeTypeName}成绩已发布：${gradeData.score}`
     );
   }
 

@@ -256,8 +256,13 @@ const fetchCourses = async () => {
 const fetchStudents = async () => {
   try {
     const response = await userService.getUsers()
-    students.value = response.data.filter(user => user.role === 'student')
+    // Map _id to id for compatibility
+    students.value = response.data.filter(user => user.role === 'student').map(user => ({
+      ...user,
+      id: user._id
+    }))
   } catch (error) {
+    ElMessage.error('获取学生列表失败')
     console.error('Failed to fetch students:', error)
   }
 }
@@ -325,14 +330,14 @@ const handleEditGrade = (grade) => {
   resetGradeForm()
   
   // 填充表单数据
-  gradeForm.studentId = grade.studentId
-  gradeForm.courseId = grade.courseId
+  gradeForm.studentId = grade.studentId?._id || grade.studentId
+  gradeForm.courseId = grade.courseId?._id || grade.courseId
   gradeForm.score = grade.score
   gradeForm.type = grade.type
   gradeForm.comment = grade.comment
   
   // 保存当前编辑的成绩ID
-  gradeForm.id = grade.id
+  gradeForm.id = grade._id || grade.id
   
   dialogVisible.value = true
 }
@@ -349,7 +354,8 @@ const handleDeleteGrade = (grade) => {
     }
   ).then(async () => {
     try {
-      await gradeService.deleteGrade(grade.id)
+      const gradeId = grade._id || grade.id
+      await gradeService.deleteGrade(gradeId)
       ElMessage.success('成绩删除成功')
       fetchCourseGrades(selectedCourseId.value)
     } catch (error) {
@@ -384,7 +390,21 @@ const handleSubmitGrade = async () => {
       submitLoading.value = true
       
       try {
-        await gradeService.saveGrade(gradeForm)
+        // Create a copy of the form data to ensure we're using the right ID format
+        const gradeData = {
+          ...gradeForm,
+          // Ensure we're using the MongoDB _id format
+          studentId: gradeForm.studentId,
+          courseId: gradeForm.courseId
+        }
+        
+        // If editing, include the ID
+        if (isEdit.value && gradeForm.id) {
+          gradeData.id = gradeForm.id
+        }
+        
+        console.log('Submitting grade data:', gradeData)
+        await gradeService.saveGrade(gradeData)
         
         ElMessage.success(isEdit.value ? '成绩更新成功' : '成绩添加成功')
         dialogVisible.value = false

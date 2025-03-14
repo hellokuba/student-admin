@@ -20,7 +20,7 @@ const gradeSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['midterm', 'final', 'assignment', 'quiz']
+    enum: ['期中考试', '期末考试', '平时成绩', '实验', '作业', '其他', 'midterm', 'final', 'assignment', 'quiz']
   },
   comment: String
 }, {

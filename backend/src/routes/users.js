@@ -3,8 +3,8 @@ const router = new Router({ prefix: '/users' });
 const { auth, checkRole } = require('../middlewares/auth');
 const User = require('../models/user');
 
-// Get all users (admin only)
-router.get('/', auth, checkRole(['admin']), async (ctx) => {
+// Get all users (admin and teacher)
+router.get('/', auth, checkRole(['admin', 'teacher']), async (ctx) => {
   const users = await User.find({}, '-password');
   ctx.body = {
     success: true,
